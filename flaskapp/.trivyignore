@@ -1,0 +1,4 @@
+#Vendored copies inside setuptoos/_vendor - not loaded as runtime deps
+#Exploit requires importing setuptools._vendor.* directly
+CVE-2026-23949
+CVE-2026-24049

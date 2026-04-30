@@ -7,7 +7,7 @@ FROM python:3.11-slim@sha256:6d85378d88a19cd4d76079817532d62232be95757cb45945a99
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY . .
-RUN pip install --no-cache-dir --upgrade wheel==0.46.2 setuptools==80.0.0
+RUN pip install --no-cache-dir --upgrade wheel setuptools
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 EXPOSE 5000

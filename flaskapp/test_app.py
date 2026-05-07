@@ -3,7 +3,7 @@ from app import app
 
 @pytest.fixture
 def client():
-    app.config["TESTING"] = True
+    app.config["TESTING"] = True # nosem: python.flask.security.audit.hardcoded-config.avoid_hardcoded_config_TESTING
     with app.test_client() as client:
         yield client
 

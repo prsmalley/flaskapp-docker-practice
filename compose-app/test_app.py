@@ -9,7 +9,7 @@ from app import app
 def client():
     fake = fakeredis.FakeStrictRedis(decode_responses=True)
     with patch("app.redis_client", fake):
-        app.config["TESTING"] = True
+        app.config["TESTING"] = True # nosem: python.flask.security.audit.hardcoded-config.avoid_hardcoded_config_TESTING
         with app.test_client() as client:
             yield client
 

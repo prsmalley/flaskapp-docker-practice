@@ -1,7 +1,7 @@
 # flaskapp-docker-practice
 
 A small Flask app and multi-container Compose stack with a production-quality Dockerfile and a two-pipeline
-CI/CD setup that lints, scans, builds, and ships the container to GHCR. Deployment handled by Ansible in a separate repo linked below.
+CI/CD setup that lints, scans, builds, and ships the container to GHCR. Deployment of the Flask app handled by Ansible in a separate repo linked below. Compose stack not deployed.
 
 
 
@@ -41,6 +41,8 @@ curl http://localhost:5000/counter
 
 `/counter` increments a Redis-backed counter and persists across container
 restarts. `docker compose down -v` wipes state.
+
+Not currently deployed via ansible-playground.
 
 ## Endpoints
 
@@ -113,5 +115,5 @@ a separate repo containing the Ansible playbook and a self-hosted GitHub
 Actions runner. The deploy workflow pulls a specific image tag from GHCR
 and runs it on the target host with a `/health` check.
 
-Why two repos: separation of concerns. This repo owns the app and the
-image. ansible-playground owns the host configuration and deploy logic.
+Two repos are constructed for separation of concerns. This repo owns the app and the
+image while ansible-playground owns the host configuration and deploy logic.

@@ -1,31 +1,29 @@
 # flaskapp-docker-practice
 
-A practice repo for Docker, Docker Compose, and CI/CD workflows. A small Flask
-app, a production-quality Dockerfile, a multi-container Compose stack, and a
-two-pipeline GitHub Actions setup that lints, scans, builds, and ships the
-container to GHCR.
+A small Flask app and multi-container Compose stack with a production-quality Dockerfile and a two-pipeline
+CI/CD setup that lints, scans, builds, and ships the container to GHCR. Deployment handled by Ansible in a separate repo linked below.
+
+
 
 ## Repo layout
 
 ```
 flaskapp/
-  app.py             # Flask app with /health and /greet?name=X endpoints
+  app.py             # Flask app: /health, /greet?name=X, /version
   requirements.txt   # Pinned Python deps
   Dockerfile         # Multi-stage, slim base, non-root user, healthcheck
-  .dockerignore      # Excludes .git, __pycache__, etc. from build context
 compose-app/
-  app.py             # Same app, extended with Redis-backed /counter
-  requirements.txt   # Adds redis client
+  app.py             # Same app, plus a Redis-backed /counter
+  docker-compose.yml # Flask + Redis with a named volume
   Dockerfile         # Identical to flaskapp/
-  docker-compose.yml # Defines app + redis services with named volume
 .github/workflows/
-  ci.yml             # Lint, scan, build verification on every PR
-  release.yml        # Multi-arch image build and push to GHCR on main / tags
+  ci.yml             # Lint, scan, test, build verification on every PR
+  release.yml        # Multi-arch build + push to GHCR + post-publish scan
 ```
 
 ## Quick start
 
-### Run the single-container app
+### Single container
 
 ```bash
 cd flaskapp
@@ -33,7 +31,7 @@ docker build -t flaskapp:local .
 docker run --rm -p 5000:5000 flaskapp:local
 ```
 
-### Run the Compose stack
+### Compose stack (with Redis)
 
 ```bash
 cd compose-app
@@ -41,73 +39,79 @@ docker compose up -d --build
 curl http://localhost:5000/counter
 ```
 
-`/counter` increments a Redis-backed counter on each call and persists across
-container restarts. To wipe state, `docker compose down -v`.
+`/counter` increments a Redis-backed counter and persists across container
+restarts. `docker compose down -v` wipes state.
 
 ## Endpoints
 
-| Endpoint | Method | Description |
-|---|---|---|
-| `/health` | GET | Returns `{"status": "ok"}` for health checks. |
-| `/greet?name=X` | GET | Returns `{"greeting": "Hi, X"}`; defaults to `world`. |
-| `/counter` | GET | INCR a Redis counter and return the new value. Compose stack only. |
+| Endpoint | Description |
+|---|---|
+| `/health` | Returns `{"status": "ok"}`. |
+| `/greet?name=X` | Returns `{"greeting": "Hi, X"}`. Defaults to `world`. |
+| `/version` | Returns `{"version": "1.0.0"}`. |
+| `/counter` | INCRs a Redis counter. Compose stack only. |
 
 ## Dockerfile highlights
 
-- **Multi-stage build** — dependencies install in a builder stage, runtime
-  image stays clean.
-- **`python:3.11-slim` pinned by SHA digest** — reproducible across rebuilds.
-- **Non-root `appuser`** — defense in depth if the app process is compromised.
-- **`HEALTHCHECK`** — Docker / orchestrators can detect a sick container.
-- **Layer caching** — `requirements.txt` copied before app code, so dependency
+- Multi-stage build — dependencies in a builder stage, runtime image stays
+  clean.
+- `python:3.11-slim` pinned by SHA digest.
+- Non-root user.
+- `HEALTHCHECK` instruction.
+- Layer caching — `requirements.txt` copied before app code so dependency
   installs only re-run when deps change.
 
-## Compose stack (`compose-app/docker-compose.yml`)
+## Compose stack
 
-A two-service stack demonstrating real-world container orchestration patterns:
+`compose-app/docker-compose.yml` runs Flask plus Redis on a Compose-managed
+network.
 
-- **Service discovery via Compose's embedded DNS.** The Flask app reaches Redis
-  by hostname (`redis`) — Compose creates a user-defined network for the
-  project, registers each service name as an A record, and the Docker daemon's
-  embedded DNS server (at `127.0.0.11` inside containers) resolves them.
-- **Named volume `redis-data` for persistence.** Mounted at Redis's data
-  directory so counter state survives `docker compose down`. `docker compose
-  down -v` is required to actually remove it.
-- **`depends_on: [redis]`** controls startup *order* but not *readiness*.
-  Compose starts Redis before the app, but doesn't wait for Redis to accept
-  connections. The app uses a lazy Redis client, so this is safe in practice.
-- **Redis port not published to host.** Reachable only from inside the
-  Compose network — avoids advertising an unauthenticated Redis externally.
+- Flask reaches Redis by hostname (`redis`) — Compose registers each
+  service name in Docker's embedded DNS.
+- Named volume `redis-data` keeps counter state across restarts.
+- `depends_on` controls startup order, not readiness. The app uses a lazy
+  Redis client.
+- Redis port isn't published to the host — only reachable from inside the
+  Compose network.
 
 ## CI pipeline (`.github/workflows/ci.yml`)
 
-Four parallel jobs run on every pull request and on push to `main`:
+Six parallel jobs on every PR and on push to `main`. Any failure blocks the
+PR.
 
-| Job | What it does | Why |
-|---|---|---|
-| **lint** | Runs `ruff` against `flaskapp/` | Catches Python style and syntax issues before review. |
-| **hadolint** | Lints the `Dockerfile` | Catches Dockerfile anti-patterns (missing `--no-cache-dir`, unpinned base images, etc.). |
-| **gitleaks** | Scans full git history for committed secrets | Backstop in case the local pre-commit hook is bypassed. |
-| **build-and-scan** | Builds the Docker image, then scans it with `trivy` for HIGH/CRITICAL CVEs | Verifies the image actually builds and blocks merging if known vulnerabilities ship. |
-
-Any failing job blocks the PR.
+| Job | What it does |
+|---|---|
+| **lint** | `ruff` against the Python code. |
+| **hadolint** | Lints the Dockerfile. |
+| **gitleaks** | Scans full git history for committed secrets. |
+| **build-and-scan** | Builds the image, scans with Trivy for HIGH/CRITICAL CVEs. |
+| **test** | Runs pytest against `flaskapp/` and `compose-app/`. |
+| **semgrep** | SAST for code-level security issues. |
 
 ## Release pipeline (`.github/workflows/release.yml`)
 
-On push to `main` and on semver tag pushes (`v*.*.*`), builds and pushes a
-multi-arch image to GitHub Container Registry.
+Triggers:
+- `workflow_run` on CI success on `main` (gates release on CI passing).
+- Tag pushes matching `v*.*.*`.
 
-| Step | What it does |
-|---|---|
-| **Log in to GHCR** | Authenticates using the workflow's auto-provisioned `GITHUB_TOKEN`|
-| **`setup-qemu` + `setup-buildx`** | Enables cross-architecture builds via QEMU emulation, with BuildKit's advanced caching and multi-platform support. |
-| **`metadata-action` computes tags** | Generates a tag matrix per push: short SHA (`sha-abc1234`), branch name, semver (when a `v1.2.3` tag is pushed), and `latest` (only on the default branch). |
-| **`build-push-action`** | Builds for `linux/amd64` and `linux/arm64`, pushes to `ghcr.io/prsmalley/flaskapp-docker-practice`, and caches layers in GitHub Actions cache. |
+Builds a multi-arch image (amd64 + arm64 via QEMU + Buildx), pushes to GHCR
+with a tag matrix from `docker/metadata-action` (short SHA, branch, semver,
+`latest`), then runs a second Trivy scan against the just-published artifact.
 
-Pulling a specific build:
+Pulling a build:
 
 ```bash
 docker pull ghcr.io/prsmalley/flaskapp-docker-practice:latest
 docker pull ghcr.io/prsmalley/flaskapp-docker-practice:sha-abc1234
 docker pull ghcr.io/prsmalley/flaskapp-docker-practice:1.2.3
 ```
+
+## Deployment
+
+Images are deployed by [ansible-playground](https://github.com/prsmalley/ansible-playground),
+a separate repo containing the Ansible playbook and a self-hosted GitHub
+Actions runner. The deploy workflow pulls a specific image tag from GHCR
+and runs it on the target host with a `/health` check.
+
+Why two repos: separation of concerns. This repo owns the app and the
+image. ansible-playground owns the host configuration and deploy logic.

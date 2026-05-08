@@ -21,6 +21,9 @@ def counter():
     count = redis_client.incr('hits')
     return jsonify(count=count)
 
+@app.route("/version")
+def version():
+    return {"version": "1.0.0"}
 
 if __name__ == "__main__":
     host = os.environ.get("FLASK_HOST", "127.0.0.1")

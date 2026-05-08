@@ -22,3 +22,8 @@ def test_greet_with_name(client):
     response = client.get("/greet", query_string={"name": "Patrick"})
     assert response.status_code == 200
     assert "Patrick" in response.get_json()["greeting"]
+
+def test_version_endpoint(client):
+    response = client.get("/version")
+    assert response.status_code == 200
+    assert response.get_json() == {"version": "1.0.0"}

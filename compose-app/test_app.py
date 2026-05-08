@@ -31,3 +31,7 @@ def test_counter_increments(client):
     assert r2.get_json()["count"] == 2
     assert r3.get_json()["count"] == 3
 
+def test_version_endpoint(client):
+    response = client.get("/version")
+    assert response.status_code == 200
+    assert response.get_json() == {"version": "1.0.0"}

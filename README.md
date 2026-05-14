@@ -1,9 +1,14 @@
 # flaskapp-docker-practice
 
-A small Flask app and multi-container Compose stack with a production-quality Dockerfile and a two-pipeline
-CI/CD setup that lints, scans, builds, and ships the container to GHCR. Deployment of the Flask app handled by Ansible in a separate repo linked below. Compose stack not deployed.
+A Flask app with a production-grade container image pipeline. Builds
+multi-arch OCI images via Docker tooling, scans them at two stages, and
+publishes to GHCR. The image is consumed by
+[ansible-playground](https://github.com/prsmalley/ansible-playground)'s
+deploy automation against AWS infrastructure provisioned by
+[terraform-flaskapp-infra](https://github.com/prsmalley/terraform-flaskapp-infra).
 
-
+This repo owns the **image**. The other two own the infrastructure and
+the deploy.
 
 ## Repo layout
 
@@ -14,14 +19,14 @@ flaskapp/
   Dockerfile         # Multi-stage, slim base, non-root user, healthcheck
 compose-app/
   app.py             # Same app, plus a Redis-backed /counter
-  docker-compose.yml # Flask + Redis with a named volume
+  docker-compose.yml # Flask + Redis with a named volume (local dev only)
   Dockerfile         # Identical to flaskapp/
 .github/workflows/
   ci.yml             # Lint, scan, test, build verification on every PR
   release.yml        # Multi-arch build + push to GHCR + post-publish scan
 ```
 
-## Quick start
+## Quick start (local development)
 
 ### Single container
 
@@ -42,22 +47,25 @@ curl http://localhost:5000/counter
 `/counter` increments a Redis-backed counter and persists across container
 restarts. `docker compose down -v` wipes state.
 
-Not currently deployed via ansible-playground.
+**Note:** the Compose stack is a local-dev artifact demonstrating Compose
+patterns (service discovery via embedded DNS, named volumes, `depends_on`
+semantics). Production deploys a single container; multi-service
+orchestration is the job of Kubernetes downstream.
 
 ## Endpoints
 
 | Endpoint | Description |
 |---|---|
-| `/health` | Returns `{"status": "ok"}`. |
+| `/health` | Returns `{"status": "ok"}`. Used by readiness probes. |
 | `/greet?name=X` | Returns `{"greeting": "Hi, X"}`. Defaults to `world`. |
 | `/version` | Returns `{"version": "1.0.0"}`. |
 | `/counter` | INCRs a Redis counter. Compose stack only. |
 
 ## Dockerfile highlights
 
-- Multi-stage build — dependencies in a builder stage, runtime image stays
-  clean.
-- `python:3.11-slim` pinned by SHA digest.
+- Multi-stage build — dependencies install in a builder stage; runtime
+  image stays clean.
+- `python:3.11-slim` pinned by SHA digest for reproducibility.
 - Non-root user.
 - `HEALTHCHECK` instruction.
 - Layer caching — `requirements.txt` copied before app code so dependency
@@ -66,20 +74,20 @@ Not currently deployed via ansible-playground.
 ## Compose stack
 
 `compose-app/docker-compose.yml` runs Flask plus Redis on a Compose-managed
-network.
+network. Local-dev demonstration of:
 
-- Flask reaches Redis by hostname (`redis`) — Compose registers each
-  service name in Docker's embedded DNS.
-- Named volume `redis-data` keeps counter state across restarts.
-- `depends_on` controls startup order, not readiness. The app uses a lazy
-  Redis client.
-- Redis port isn't published to the host — only reachable from inside the
+- Service discovery via Docker's embedded DNS (Flask reaches Redis by
+  hostname).
+- Named volume `redis-data` for persistent state across restarts.
+- `depends_on` controls startup order, not readiness — the app uses a
+  lazy Redis client.
+- Redis port isn't published to the host — only reachable inside the
   Compose network.
 
 ## CI pipeline (`.github/workflows/ci.yml`)
 
-Six parallel jobs on every PR and on push to `main`. Any failure blocks the
-PR.
+Six parallel jobs on every PR and on push to `main`. Any failure blocks
+the PR.
 
 | Job | What it does |
 |---|---|
@@ -96,9 +104,10 @@ Triggers:
 - `workflow_run` on CI success on `main` (gates release on CI passing).
 - Tag pushes matching `v*.*.*`.
 
-Builds a multi-arch image (amd64 + arm64 via QEMU + Buildx), pushes to GHCR
-with a tag matrix from `docker/metadata-action` (short SHA, branch, semver,
-`latest`), then runs a second Trivy scan against the just-published artifact.
+Builds a multi-arch image (`linux/amd64` + `linux/arm64` via QEMU +
+Buildx), pushes to GHCR with a tag matrix from `docker/metadata-action`
+(short SHA, branch, semver, `latest`), then runs a second Trivy scan
+against the just-published artifact.
 
 Pulling a build:
 
@@ -110,10 +119,14 @@ docker pull ghcr.io/prsmalley/flaskapp-docker-practice:1.2.3
 
 ## Deployment
 
-Images are deployed by [ansible-playground](https://github.com/prsmalley/ansible-playground),
-a separate repo containing the Ansible playbook and a self-hosted GitHub
-Actions runner. The deploy workflow pulls a specific image tag from GHCR
-and runs it on the target host with a `/health` check.
+This repo releases an image to GHCR  which is pulled and
+run by [ansible-playground](https://github.com/prsmalley/ansible-playground),
+which currently targets a single-node k3s cluster on AWS EC2 provisioned
+by [terraform-flaskapp-infra](https://github.com/prsmalley/terraform-flaskapp-infra).
 
-Two repos are constructed for separation of concerns. This repo owns the app and the
-image while ansible-playground owns the host configuration and deploy logic.
+Three repos, one responsibility each — see
+[ARCHITECTURE.md](https://github.com/prsmalley/ansible-playground/blob/main/ARCHITECTURE.md)
+in ansible-playground for the end-to-end design.
+
+**Note on Docker vs. Kubernetes:** the image is built with Docker tooling
+but the production runtime is **containerd** via k3s. 

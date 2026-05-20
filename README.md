@@ -119,10 +119,14 @@ docker pull ghcr.io/prsmalley/flaskapp-docker-practice:1.2.3
 
 ## Deployment
 
-This repo releases an image to GHCR  which is pulled and
-run by [ansible-playground](https://github.com/prsmalley/ansible-playground),
-which currently targets a single-node k3s cluster on AWS EC2 provisioned
-by [terraform-flaskapp-infra](https://github.com/prsmalley/terraform-flaskapp-infra).
+This repo releases an image to GHCR. It's pulled and deployed by
+[ansible-playground](https://github.com/prsmalley/ansible-playground),
+which applies Kubernetes manifests to a single-node k3s cluster on AWS EC2
+provisioned by
+[terraform-flaskapp-infra](https://github.com/prsmalley/terraform-flaskapp-infra).
+The deploy itself runs on ephemeral self-hosted GitHub Actions runners
+managed by ARC inside that same cluster. Runner pods spawn per job,
+execute `kubectl apply`, and terminate.
 
 Three repos, one responsibility each — see
 [ARCHITECTURE.md](https://github.com/prsmalley/ansible-playground/blob/main/ARCHITECTURE.md)

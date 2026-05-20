@@ -1,14 +1,20 @@
 # flaskapp-docker-practice
+This is one of three repos that together build, provision, and deploy a Flask app to a k3s cluster on AWS EC2:
 
-A Flask app with a production-grade container image pipeline. Builds
-multi-arch OCI images via Docker tooling, scans them at two stages, and
-publishes to GHCR. The image is consumed by
-[ansible-playground](https://github.com/prsmalley/ansible-playground)'s
-deploy automation against AWS infrastructure provisioned by
-[terraform-flaskapp-infra](https://github.com/prsmalley/terraform-flaskapp-infra).
+- **flaskapp-docker-practice** — builds and publishes the container image to GHCR.
+- **[terraform-flaskapp-infra](https://github.com/prsmalley/terraform-flaskapp-infra)** — provisions the EC2 host.
+- **[ansible-playground](https://github.com/prsmalley/ansible-playground)** — bootstraps k3s and deploys the app via ephemeral self-hosted runners (ARC) running inside the cluster.
 
-This repo owns the **image**. The other two own the infrastructure and
-the deploy.
+See [ARCHITECTURE.md](https://github.com/prsmalley/ansible-playground/blob/main/ARCHITECTURE.md) for the full design.
+
+```mermaid
+flowchart LR
+    A[flaskapp-docker-practice<br/>builds image] -->|push| GHCR[(GHCR)]
+    B[terraform-flaskapp-infra<br/>provisions EC2] --> EC2[k3s on EC2]
+    C[ansible-playground<br/>deploys via ARC] -->|kubectl apply| EC2
+    GHCR -.image pull.-> EC2
+    EC2 --> APP[Running flaskapp]
+```
 
 ## Repo layout
 

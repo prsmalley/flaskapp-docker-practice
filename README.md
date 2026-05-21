@@ -1,5 +1,12 @@
 # flaskapp-docker-practice
-This is one of three repos that together build, provision, and deploy a Flask app to a k3s cluster on AWS EC2:
+
+[![CI](https://github.com/prsmalley/flaskapp-docker-practice/actions/workflows/ci.yml/badge.svg)](https://github.com/prsmalley/flaskapp-docker-practice/actions/workflows/ci.yml)
+[![Release](https://github.com/prsmalley/flaskapp-docker-practice/actions/workflows/release.yml/badge.svg)](https://github.com/prsmalley/flaskapp-docker-practice/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+**Status:** Deployed end-to-end on AWS EC2 and verified running (last tested 2026-05-20). The live instance is currently reachable only from the operator IP — the security group restricts inbound to `my_ip/32`. Opening the app via DNS + HTTPS is the next planned step.
+
+This repo owns the container image pipeline: six-job CI with security scanning, multi-arch builds, and post-publish vulnerability scans. It's one of three repos that together build, provision, and deploy a Flask app to a k3s cluster on AWS EC2:
 
 - **flaskapp-docker-practice** — builds and publishes the container image to GHCR.
 - **[terraform-flaskapp-infra](https://github.com/prsmalley/terraform-flaskapp-infra)** — provisions the EC2 host.
@@ -9,11 +16,16 @@ See [ARCHITECTURE.md](https://github.com/prsmalley/ansible-playground/blob/main/
 
 ```mermaid
 flowchart LR
-    A[flaskapp-docker-practice<br/>builds image] -->|push| GHCR[(GHCR)]
-    B[terraform-flaskapp-infra<br/>provisions EC2] --> EC2[k3s on EC2]
-    C[ansible-playground<br/>deploys via ARC] -->|kubectl apply| EC2
-    GHCR -.image pull.-> EC2
-    EC2 --> APP[Running flaskapp]
+    A[flaskapp-docker-practice] -->|CI + release| GHCR[(GHCR)]
+    B[terraform-flaskapp-infra] -.provisions.-> EC2
+    C[ansible-playground] -.bootstraps.-> k3s
+    C --> Runner
+    subgraph EC2[AWS EC2]
+        subgraph k3s[k3s cluster]
+            Runner[ARC runner pod] -->|kubectl apply| APP[flaskapp pods]
+        end
+    end
+    GHCR -.image pull.-> APP
 ```
 
 ## Repo layout
@@ -55,23 +67,34 @@ restarts. `docker compose down -v` wipes state.
 
 **Note:** the Compose stack is a local-dev artifact demonstrating Compose
 patterns (service discovery via embedded DNS, named volumes, `depends_on`
-semantics). Production deploys a single container; multi-service
+semantics). This image is never published to GHCR. Production deploys a single container; multi-service
 orchestration is the job of Kubernetes downstream.
 
 ## Endpoints
 
+### `flaskapp/` — production image (deployed to K8s)
+
 | Endpoint | Description |
 |---|---|
-| `/health` | Returns `{"status": "ok"}`. Used by readiness probes. |
+| `/health` | Returns `{"status": "ok"}`. Used by readiness and liveness probes. |
 | `/greet?name=X` | Returns `{"greeting": "Hi, X"}`. Defaults to `world`. |
 | `/version` | Returns `{"version": "1.0.0"}`. |
-| `/counter` | INCRs a Redis counter. Compose stack only. |
+
+### `compose-app/` — local-dev image (adds Redis, not deployed)
+
+Same endpoints as above, plus:
+
+| Endpoint | Description |
+|---|---|
+| `/counter` | INCRs a Redis-backed counter. Only available in the Compose stack. |
 
 ## Dockerfile highlights
 
 - Multi-stage build — dependencies install in a builder stage; runtime
   image stays clean.
-- `python:3.11-slim` pinned by SHA digest for reproducibility.
+- `python:3.11-slim` pinned by **SHA digest** for reproducibility. The pin
+  was refreshed when the post-publish Trivy scan flagged three HIGH CVEs
+  in the prior digest
 - Non-root user.
 - `HEALTHCHECK` instruction.
 - Layer caching — `requirements.txt` copied before app code so dependency
@@ -104,16 +127,26 @@ the PR.
 | **test** | Runs pytest against `flaskapp/` and `compose-app/`. |
 | **semgrep** | SAST for code-level security issues. |
 
+**Branch protection** on `main` enforces all six checks, requires PR review,
+requires linear history, and disallows admin bypass.
+
 ## Release pipeline (`.github/workflows/release.yml`)
 
 Triggers:
-- `workflow_run` on CI success on `main` (gates release on CI passing).
+- `workflow_run` on CI success on `main` — release only fires after CI
+  passes, gated externally rather than duplicating checks inside
+  `release.yml`.
 - Tag pushes matching `v*.*.*`.
 
-Builds a multi-arch image (`linux/amd64` + `linux/arm64` via QEMU +
+Builds a **multi-arch image** (`linux/amd64` + `linux/arm64` via QEMU +
 Buildx), pushes to GHCR with a tag matrix from `docker/metadata-action`
-(short SHA, branch, semver, `latest`), then runs a second Trivy scan
+(short SHA, branch, semver, `latest`), then runs a **second Trivy scan**
 against the just-published artifact.
+
+The image is scanned twice: pre-publish in CI, post-publish against the
+GHCR-resident tag. The post-publish scan catches drift between the local
+build context and what actually lands in the registry, and is what flagged
+the base-image CVEs mentioned above.
 
 Pulling a build:
 
@@ -139,4 +172,8 @@ Three repos, one responsibility each — see
 in ansible-playground for the end-to-end design.
 
 **Note on Docker vs. Kubernetes:** the image is built with Docker tooling
-but the production runtime is **containerd** via k3s. 
+but the production runtime is **containerd** via k3s.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

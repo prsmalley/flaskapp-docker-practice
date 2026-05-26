@@ -4,7 +4,7 @@
 [![Release](https://github.com/prsmalley/flaskapp-docker-practice/actions/workflows/release.yml/badge.svg)](https://github.com/prsmalley/flaskapp-docker-practice/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Status:** Deployed end-to-end on AWS EC2 and verified running (last tested 2026-05-20). The live instance is currently reachable only from the operator IP — the security group restricts inbound to `my_ip/32`. Opening the app via DNS + HTTPS is the next planned step.
+**Status:** **Live at https://flaskapp.prsmalley.dev/health** — public HTTPS via Cloudflare Tunnel running on the EC2. The EC2 itself stays SG-restricted to the operator IP for SSH and the K8s API.
 
 This repo owns the container image pipeline: six-job CI with security scanning, multi-arch builds, and post-publish vulnerability scans. It's one of three repos that together build, provision, and deploy a Flask app to a k3s cluster on AWS EC2:
 

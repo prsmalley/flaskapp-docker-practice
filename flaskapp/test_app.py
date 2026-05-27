@@ -27,3 +27,20 @@ def test_version_endpoint(client):
     response = client.get("/version")
     assert response.status_code == 200
     assert response.get_json() == {"version": "1.0.0"}
+
+
+def test_metrics_endpoint(client):
+    client.get('/health')
+
+    response = client.get('/metrics')
+    assert response.status_code == 200
+    assert b'flaskapp_requests_total' in response.data
+    assert b'flaskapp_request_latency_seconds' in response.data
+
+
+def test_landing_page(client):
+    response = client.get('/')
+    assert response.status_code == 200
+    assert response.content_type.startswith('text/html')
+    assert b'flaskapp' in response.data
+    assert b'/health' in response.data

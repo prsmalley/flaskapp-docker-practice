@@ -56,9 +56,7 @@ def greet():
 def version():
     return {"version": "1.0.0"}
 
-if __name__ == "__main__":
-    host = os.environ.get("FLASK_HOST", "127.0.0.1")
-    app.run(host=host, port=5000)
+
 
 
 
@@ -97,3 +95,8 @@ LANDING_PAGE = """<!DOCTYPE html>
 @app.route('/')
 def index():
     return LANDING_PAGE, 200, {'Content-Type': 'text/html; charset=utf-8'}#
+
+
+if __name__ == "__main__":
+    host = os.environ.get("FLASK_HOST", "127.0.0.1")
+    app.run(host=host, port=5000)

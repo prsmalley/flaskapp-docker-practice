@@ -34,8 +34,16 @@ def test_metrics_endpoint(client):
 
     response = client.get('/metrics')
     assert response.status_code == 200
-    assert b'flaskapp_requests_total' in response.data
-    assert b'flaskapp_request_latency_seconds' in response.data
+    assert b'flaskapp_requests_total{endpoint="health",method="GET",status="200"}' in response.data
+    assert b'flaskapp_request_latency_seconds_count{endpoint="health"}' in response.data
+
+
+def test_unknown_method_collapses_to_other(client):
+    client.open('/health', method='PROPFIND')
+
+    response = client.get('/metrics')
+    assert b'method="other"' in response.data
+    assert b'method="PROPFIND"' not in response.data
 
 
 def test_landing_page(client):

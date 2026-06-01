@@ -76,9 +76,11 @@ orchestration is the job of Kubernetes downstream.
 
 | Endpoint | Description |
 |---|---|
+| `/` | HTML landing page linking the endpoints and the three source repos. |
 | `/health` | Returns `{"status": "ok"}`. Used by readiness and liveness probes. |
 | `/greet?name=X` | Returns `{"greeting": "Hi, X"}`. Defaults to `world`. |
 | `/version` | Returns `{"version": "1.0.0"}`. |
+| `/metrics` | Request counts and latencies in Prometheus format. Scraped by Prometheus in the cluster. |
 
 ### `compose-app/` — local-dev image (adds Redis, not deployed)
 

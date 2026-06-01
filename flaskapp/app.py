@@ -17,6 +17,9 @@ REQUEST_LATENCY = Histogram(
         ['endpoint']
 )
 
+
+ALLOWED_METHODS = {'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'}
+
 @app.before_request
 def start_timer():
     request._start_time = time.time()
@@ -26,17 +29,21 @@ def record_metrics(response):
     if request.endpoint == 'metrics':
             return response
 
+    method = request.method if request.method in ALLOWED_METHODS else 'other'
+
     REQUEST_COUNT.labels(
-            method=request.method,
+            method=method,
             endpoint=request.endpoint or 'unknown',
             status=response.status_code
     ).inc()
 
-    REQUEST_LATENCY.labels(
-            endpoint=request.endpoint or 'unknown'
-    ).observe(
-            time.time() - request._start_time
-    )
+    start_time = getattr(request, '_start_time', None)
+    if start_time is not None:
+        REQUEST_LATENCY.labels(
+                endpoint=request.endpoint or 'unknown'
+        ).observe(
+                time.time() - start_time
+        )
     return response
 
 @app.route('/metrics')
@@ -60,7 +67,7 @@ def version():
 
 
 
-##Landing Page#
+
 LANDING_PAGE = """<!DOCTYPE html>
 <html>
 <head>

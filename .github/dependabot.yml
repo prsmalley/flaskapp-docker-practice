@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # Keep pinned GitHub Actions SHAs current (opens a PR when a newer release exists)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  # Watch Python dependencies for the deployed app
+  - package-ecosystem: "pip"
+    directory: "/flaskapp"
+    schedule:
+      interval: "weekly"
+
+  # Watch Python dependencies for the local-dev Compose app
+  - package-ecosystem: "pip"
+    directory: "/compose-app"
+    schedule:
+      interval: "weekly"
+
+  # Watch the base image in the Dockerfile for digest/security updates
+  - package-ecosystem: "docker"
+    directory: "/flaskapp"
+    schedule:
+      interval: "weekly"

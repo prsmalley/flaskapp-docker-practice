@@ -4,7 +4,7 @@
 [![Release](https://github.com/prsmalley/flaskapp-docker-practice/actions/workflows/release.yml/badge.svg)](https://github.com/prsmalley/flaskapp-docker-practice/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Status:** **Live at https://flaskapp.prsmalley.dev/health** — public HTTPS via Cloudflare Tunnel running on the EC2. The EC2 itself stays SG-restricted to the operator IP for SSH and the K8s API.
+**Status:** **Live at https://flaskapp.prsmalley.dev** — public HTTPS via Cloudflare Tunnel running on the EC2. The EC2 itself stays SG-restricted to the operator IP for SSH and the K8s API.
 
 This repo owns the container image pipeline: six-job CI with security scanning, multi-arch builds, and post-publish vulnerability scans. It's one of three repos that together build, provision, and deploy a Flask app to a k3s cluster on AWS EC2:
 
@@ -94,7 +94,7 @@ Same endpoints as above, plus:
 
 - Multi-stage build — dependencies install in a builder stage; runtime
   image stays clean.
-- `python:3.11-slim` pinned by **SHA digest** for reproducibility. The pin
+- `python:3.11-slim` pinned by SHA digest for reproducibility. The pin
   was refreshed when the post-publish Trivy scan flagged three HIGH CVEs
   in the prior digest
 - Non-root user.
@@ -149,6 +149,24 @@ The image is scanned twice: pre-publish in CI, post-publish against the
 GHCR-resident tag. The post-publish scan catches drift between the local
 build context and what actually lands in the registry, and is what flagged
 the base-image CVEs mentioned above.
+
+### Build provenance and verification
+
+On each release, `actions/attest-build-provenance` generates a signed SLSA
+provenance attestation for the published image and attaches it to the image
+in GHCR. The attestation records *which workflow run, commit, and runner*
+produced the image, so a consumer can confirm an image came from
+this pipeline and wasn't swapped or tampered with.
+
+Verify a pulled image:
+
+```bash
+gh attestation verify oci://ghcr.io/prsmalley/flaskapp-docker-practice:latest \
+  --owner prsmalley
+```
+
+The release job is scoped with only the required permissions
+(`id-token: write` and `attestations: write`).
 
 Pulling a build:
 

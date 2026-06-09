@@ -81,4 +81,4 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install semgrep
-      - run: semgrep scan --config auto --error --metrics=off
+      - run: semgrep scan --config auto --error

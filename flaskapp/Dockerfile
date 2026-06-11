@@ -1,10 +1,10 @@
-FROM python:3.11-slim@sha256:2c285c669cc837aa3bcf1af23ea1932b7b5214f9c9d3aad22417446ad91cb4fb AS builder
+FROM python:3.11-slim@sha256:f9fa7f851e38bfb19c9de3afbc4b86ae7176ea7aaf94535c31df5458d5849457 AS builder
 ENV FLASK_HOST=0.0.0.0
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir  --prefix=/install  -r requirements.txt
 
-FROM python:3.11-slim@sha256:2c285c669cc837aa3bcf1af23ea1932b7b5214f9c9d3aad22417446ad91cb4fb
+FROM python:3.11-slim@sha256:f9fa7f851e38bfb19c9de3afbc4b86ae7176ea7aaf94535c31df5458d5849457
 WORKDIR /app
 COPY --from=builder /install /usr/local
 COPY . .
